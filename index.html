@@ -321,6 +321,7 @@
     </div>
 
     <div class="screen" id="game-screen">
+        <div id="click-to-play" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:260; pointer-events:none; color:#fff; font-size:30px; font-weight:bold; text-shadow:0 0 12px #ff6600, 2px 2px 4px #000; background:rgba(0,0,0,0.55); padding:18px 30px; border-radius:12px; border:2px solid #ff8800; letter-spacing:1px;">🖱 Кликните, чтобы захватить мышь и стрелять<br><span style="font-size:18px; color:#ffcc88;">(движение WASD работает уже сейчас)</span></div>
         <div id="hud">
             <div id="damage-overlay"></div>
             <div id="crosshair"></div>
@@ -854,12 +855,22 @@ function buildWorld() {
     scene.add(sun);
 
     const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(MAP_LIMIT * 2 + 400, MAP_LIMIT * 2 + 500),
-        new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 })
+        new THREE.PlaneGeometry(MAP_LIMIT * 2 + 60, MAP_LIMIT * 2 + 60),
+        new THREE.MeshStandardMaterial({ color: 0x3d5a34, roughness: 0.95 })   // зелёная земля за городом
     );
     ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.02;
     ground.receiveShadow = true;
     scene.add(ground);
+    // асфальт-подложка под всей городской территорией (чтобы не было "дыр" между улицами)
+    const cityBase = new THREE.Mesh(
+        new THREE.PlaneGeometry(MAP_LIMIT * 2, MAP_LIMIT * 2),
+        new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.95 })
+    );
+    cityBase.rotation.x = -Math.PI / 2;
+    cityBase.position.y = 0.01;
+    cityBase.receiveShadow = true;
+    scene.add(cityBase);
 
     buildingColliders = []; factoryWallColliders = [];
     roadSegments.length = 0;
@@ -868,7 +879,8 @@ function buildWorld() {
     const roadTexV = makeRoadTexture();          // вертикальная дорога (вдоль Z)
     const roadTexH = makeRoadTexture();          // горизонтальная дорога (вдоль X)
     roadTexH.rotation = Math.PI / 2;
-    const SPACING = 26, CITY_EXTENT = 300;      // расширенный город
+    const SPACING = 26, CITY_EXTENT = MAP_LIMIT - 8;   // город строго внутри забора
+    const ROAD_LEN = CITY_EXTENT * 2 + SPACING;        // от первой улицы до последней
     function addRoad(x, z, w, d) {
         const tex = (d >= w) ? roadTexV.clone() : roadTexH.clone();
         tex.needsUpdate = true;
@@ -885,8 +897,8 @@ function buildWorld() {
         scene.add(road);
         roadSegments.push({ x, z, w, d });
     }
-    for (let i = -11; i <= 11; i++) addRoad(i * SPACING, 0, 10, CITY_EXTENT * 2);   // вертикальные улицы
-    for (let j = -11; j <= 11; j++) addRoad(0, j * SPACING, CITY_EXTENT * 2, 10);   // горизонтальные улицы
+    for (let i = -8; i <= 8; i++) addRoad(i * SPACING, 0, 10, ROAD_LEN);   // вертикальные улицы
+    for (let j = -8; j <= 8; j++) addRoad(0, j * SPACING, ROAD_LEN, 10);   // горизонтальные улицы
 
     // ===== ЗДАНИЯ с жёлтыми окнами =====
     const wallColors = ['#8899aa', '#778899', '#667788', '#99aabb', '#556677', '#aabbcc', '#8a7f72'];
@@ -906,17 +918,17 @@ function buildWorld() {
         scene.add(roof);
         buildingColliders.push({ x, z, halfW: w/2, halfD: d/2 });
     }
-    const spacing = SPACING, blockRadius = 11;
+    const spacing = SPACING, blockRadius = 8;
     for (let i = -blockRadius; i <= blockRadius; i++) {
         for (let j = -blockRadius; j <= blockRadius; j++) {
             if (Math.abs(i) <= 1 && Math.abs(j) <= 1) continue; // центр площади свободен
-            const x = i * spacing, z = j * spacing;
-            if (Math.abs(x) > CITY_EXTENT - 15 || Math.abs(z) > CITY_EXTENT - 15) continue;
+            const x = i * spacing + (Math.random() - 0.5) * 3, z = j * spacing + (Math.random() - 0.5) * 3;
+            if (Math.abs(x) > MAP_LIMIT - 20 || Math.abs(z) > MAP_LIMIT - 20) continue;
             addBuilding(x, z, 12 + Math.random()*6, 12 + Math.random()*6, 8 + Math.random()*35);
         }
     }
-    addBuilding(-CITY_EXTENT+30, CITY_EXTENT-30, 18, 18, 70);
-    addBuilding(CITY_EXTENT-30, -CITY_EXTENT+30, 20, 20, 80);
+    addBuilding(-MAP_LIMIT + 40, MAP_LIMIT - 40, 18, 18, 70);
+    addBuilding(MAP_LIMIT - 40, -MAP_LIMIT + 40, 20, 20, 80);
 
     // ===== КИРПИЧНЫЙ ЗАБОР ПО ПЕРИМЕТРУ (из мира не выйти) =====
     const brickTex = makeBrickTexture();
@@ -1021,14 +1033,33 @@ function buildWorld() {
     labLight.position.set(LX, LH - 1, LZ); scene.add(labLight);
     ===== конец блока завода ===== */
 
-    controls = new PointerLockControls(camera, renderer.domElement);
+    // PointerLock вешаем на document.body (а не на canvas), чтобы управление
+    // не терялось при пересоздании сцены/рендера и работало стабильно
+    controls = new PointerLockControls(camera, document.body);
     scene.add(controls.getObject());
 
     monsterGroup = new THREE.Group(); scene.add(monsterGroup);
     itemGroup = new THREE.Group(); scene.add(itemGroup);
 
     buildWeaponModel();
+
+    if (!pointerEventsWired) {
+        pointerEventsWired = true;
+        document.addEventListener('pointerlockchange', () => {
+            const locked = document.pointerLockElement != null;
+            if (controls) controls.isLocked = locked;
+            if (locked) {
+                showClickToPlay(false);
+                clearTimeout(lockRetryTimer);
+            } else if (gameActive && !gameOver && !paused) {
+                // курсор вышел наружу — автоматически ставим игру на паузу
+                pauseGame();
+            }
+        });
+        document.addEventListener('pointerlockerror', () => { console.warn('Не удалось захватить курсор'); });
+    }
 }
+let pointerEventsWired = false;
 
 let weaponGroup = null;
 function buildWeaponModel() {
@@ -1544,6 +1575,9 @@ function cleanupGame() {
     items = [];
     gameActive = false; gameOver = false; paused = false;
     document.getElementById('hud').classList.remove('active');
+    showClickToPlay(false);
+    clearTimeout(lockRetryTimer);
+    moveState.forward = moveState.backward = moveState.left = moveState.right = false;
     if (controls) controls.unlock();
     if (weaponGroup) { camera.remove(weaponGroup); weaponGroup = null; }
 }
@@ -1554,13 +1588,56 @@ document.addEventListener('keydown', (e) => {
         else pauseGame();
     }
 });
+// ===== Захват мыши (PointerLock) — делаем надёжно, с повтором и явным состоянием =====
+let pendingResumeLock = false;
+let lockRetryTimer = null;
+
+function showClickToPlay(on) {
+    const el = document.getElementById('click-to-play');
+    if (el) el.style.display = on ? 'block' : 'none';
+}
+
+function tryLock() {
+    if (!gameActive || gameOver || paused || !controls) return;
+    try {
+        controls.lock();
+    } catch (err) { console.warn('lock error', err); }
+}
+
+function scheduleLockRetries() {
+    clearTimeout(lockRetryTimer);
+    let tries = 0;
+    const attempt = () => {
+        if (!gameActive || gameOver || paused || controls.isLocked || tries > 15) return;
+        tries++;
+        tryLock();
+        lockRetryTimer = setTimeout(attempt, 400);
+    };
+    attempt();
+}
+
+function onGameClick(e) {
+    // Клик по игре: если курсор не захвачен (например, после паузы или браузер
+    // отпустил блокировку) — захватываем. Если уже захвачено — это выстрел.
+    if (!gameActive || gameOver) return;
+    if (paused) return;
+    if (e.target && e.target.closest && e.target.closest('#pause-screen,#settings-screen,#menu-screen,#difficulty-screen,#gameover-screen')) return;
+    if (controls && !controls.isLocked) {
+        tryLock();
+        return;
+    }
+    if (e.button === 0) shoot();
+}
+document.addEventListener('mousedown', onGameClick);
+
 function pauseGame() {
     if (!gameActive || gameOver) return;
     paused = true;
-    controls.unlock();
+    moveState.forward = moveState.backward = moveState.left = moveState.right = false;
+    if (controls) controls.unlock();
     showScreen('pause');
     enableCustomCursor();
-    audio.gameMusic.pause();
+    audio.gameMusic.pause().catch(() => {});
     attachCursorHover([
         document.getElementById('btn-resume'),
         document.getElementById('btn-pause-settings'),
@@ -1568,11 +1645,16 @@ function pauseGame() {
     ]);
 }
 function resumeGame() {
+    if (!gameActive || gameOver) return;
     paused = false;
+    pendingResumeLock = true;
     showScreen('game');
     disableCustomCursor();
     audio.gameMusic.play().catch(() => {});
-    controls.lock();
+    // Браузер может отклонить requestPointerLock сразу после выхода из меню —
+    // поэтому пробуем несколько раз, пока не получится
+    scheduleLockRetries();
+    showClickToPlay(true);
 }
 document.getElementById('btn-resume').addEventListener('click', resumeGame);
 document.getElementById('btn-pause-settings').addEventListener('click', () => {
@@ -1584,41 +1666,45 @@ document.getElementById('btn-pause-menu').addEventListener('click', () => { clea
 
 document.addEventListener('keydown', (e) => {
     if (!gameActive || gameOver || paused) return;
+    // не перехватываем пробел/клавиши, если сейчас открыт HTML-элемент управления
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'BUTTON' || ae.tagName === 'TEXTAREA')) return;
     switch (e.code) {
-        case 'KeyW': moveState.forward = true; break;
-        case 'KeyS': moveState.backward = true; break;
-        case 'KeyA': moveState.left = true; break;
-        case 'KeyD': moveState.right = true; break;
+        case 'KeyW': case 'ArrowUp': moveState.forward = true; break;
+        case 'KeyS': case 'ArrowDown': moveState.backward = true; break;
+        case 'KeyA': case 'ArrowLeft': moveState.left = true; break;
+        case 'KeyD': case 'ArrowRight': moveState.right = true; break;
         case 'KeyR': reload(); break;
-        case 'Space': if (!isJumping) { velocity.y = hasPowerup('jump') ? JUMP_FORCE * 2.6 : JUMP_FORCE; isJumping = true; } break;
+        case 'Space': e.preventDefault(); if (!isJumping) { velocity.y = hasPowerup('jump') ? JUMP_FORCE * 2.6 : JUMP_FORCE; isJumping = true; } break;
     }
 });
 document.addEventListener('keyup', (e) => {
     switch (e.code) {
-        case 'KeyW': moveState.forward = false; break;
-        case 'KeyS': moveState.backward = false; break;
-        case 'KeyA': moveState.left = false; break;
-        case 'KeyD': moveState.right = false; break;
+        case 'KeyW': case 'ArrowUp': moveState.forward = false; break;
+        case 'KeyS': case 'ArrowDown': moveState.backward = false; break;
+        case 'KeyA': case 'ArrowLeft': moveState.left = false; break;
+        case 'KeyD': case 'ArrowRight': moveState.right = false; break;
     }
-});
-document.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && gameActive && !gameOver && !paused && controls.isLocked) shoot();
 });
 
 // ==================== МИНИ-КАРТА ====================
 const minimapCanvas = document.getElementById('minimap');
 const mmCtx = minimapCanvas.getContext('2d');
+// фиксируем реальный размер canvas в пикселях, чтобы карта не «расплывалась»
+(function setupMinimapSize() {
+    const rect = minimapCanvas.getBoundingClientRect();
+    const size = Math.round(rect.width) || 190;
+    minimapCanvas.width = size;
+    minimapCanvas.height = size;
+})();
 let playerHeading = 0;
 function drawMinimap() {
+    if (!controls || !roadSegments) return;
     const S = minimapCanvas.width, half = S / 2;
     const scale = (half - 8) / MAP_LIMIT; // вся карта видна целиком
     mmCtx.clearRect(0, 0, S, S);
     mmCtx.fillStyle = 'rgba(15,20,15,0.85)';
     mmCtx.fillRect(0, 0, S, S);
-    // границы мира
-    mmCtx.strokeStyle = '#aa4422';
-    mmCtx.lineWidth = 3;
-    mmCtx.strokeRect(8, 8, S - 16, S - 16);
     const toX = wx => half + wx * scale;
     const toY = wz => half + wz * scale;
     // дороги
@@ -1663,6 +1749,10 @@ function drawMinimap() {
     mmCtx.closePath();
     mmCtx.fill();
     mmCtx.restore();
+    // кирпичная граница мира рисуем поверх всего
+    mmCtx.strokeStyle = '#c0603a';
+    mmCtx.lineWidth = 3;
+    mmCtx.strokeRect(half - MAP_LIMIT * scale, half - MAP_LIMIT * scale, MAP_LIMIT * 2 * scale, MAP_LIMIT * 2 * scale);
 }
 
 function startGame() {
@@ -1711,8 +1801,13 @@ function startGame() {
     controls.getObject().position.set(0, PLAYER_HEIGHT, 0);
     camera.position.set(0, PLAYER_HEIGHT, 0);
     camera.rotation.set(0, 0, 0);
-    
-    controls.lock();
+
+    // Надёжный захват мыши: пробуем сразу и повторяем, пока не получится.
+    // Если не вышло — в центре экрана показываем подсказку «Кликните, чтобы играть»,
+    // любое движение WASD/клик тоже захватывает управление.
+    moveState.forward = moveState.backward = moveState.left = moveState.right = false;
+    scheduleLockRetries();
+    showClickToPlay(true);
 }
 
 const clock = new THREE.Clock();
@@ -1721,7 +1816,10 @@ function animate() {
     if (!renderer || !scene || !camera) return;
     const delta = Math.min(clock.getDelta(), 0.1);
     
-    if (gameActive && !gameOver && !paused && controls.isLocked) {
+    const canAct = gameActive && !gameOver && !paused;
+    if (canAct) {
+        // ДВИЖЕНИЕ разрешаем и до захвата мыши — чтобы игрок мог идти WASD,
+        // а курсор захватывался по клику или автоматически при попытке движения
         velocity.x = 0; velocity.z = 0;
         const speedMul = hasPowerup('speed') ? 2.0 : 1.0; // ⚡ супер-скорость
         direction.z = Number(moveState.forward) - Number(moveState.backward);
@@ -1731,6 +1829,7 @@ function animate() {
         if (moveState.left || moveState.right) velocity.x -= direction.x * PLAYER_SPEED * speedMul * delta;
         
         if (velocity.length() > 0) {
+            if (!controls.isLocked) tryLock(); // движение с клавиатуры тоже захватывает мышь
             const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); forward.y = 0; forward.normalize();
             const right = new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion); right.y = 0; right.normalize();
             const moveVec = new THREE.Vector3();
@@ -1739,9 +1838,9 @@ function animate() {
             const p = controls.getObject().position;
             const nx = p.x + moveVec.x, nz = p.z + moveVec.z;
             let can = true;
-            if (Math.abs(nx) > MAP_LIMIT - 1 || Math.abs(nz) > MAP_LIMIT - 1) can = false;
-            if (collidesWithBuilding(nx, nz, 0.7)) can = false;
-            if (can) { p.x = nx; p.z = nz; }
+            if (collidesWithBuilding(nx, p.z, 0.7)) can = false; else { p.x = nx; }
+            if (collidesWithBuilding(p.x, nz, 0.7)) { /* скользим вдоль стены по Z */ }
+            else { p.z = nz; }
         }
         
         if (isJumping) {
@@ -1768,6 +1867,12 @@ function animate() {
 }
 
 window.addEventListener('resize', () => {
+    if (minimapCanvas) {
+        const rect = minimapCanvas.getBoundingClientRect();
+        const size = Math.round(rect.width) || 190;
+        minimapCanvas.width = size;
+        minimapCanvas.height = size;
+    }
     if (camera && renderer) {
         camera.aspect = 4/3;
         camera.updateProjectionMatrix();
