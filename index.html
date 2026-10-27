@@ -179,10 +179,7 @@
             background: radial-gradient(circle, transparent 40%, rgba(255,0,0,0.7) 100%);
             pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 150;
         }
-        #location-indicator {
-            position: absolute; top: 15px; right: 15px; color: white;
-            background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 8px; font-size: 16px;
-        }
+        /* надписи "Город" больше нет — в правом верхнем углу теперь мини-карта */
 
         /* ПАУЗА */
         #pause-screen { background: rgba(0,0,0,0.85); justify-content: center; align-items: center; flex-direction: column; z-index: 2500; }
@@ -229,11 +226,12 @@
         }
         #pickup-notify.show { opacity: 1; }
 
-        /* МИНИ-КАРТА */
+        /* МИНИ-КАРТА — маленькая, в правом верхнем углу (вместо надписи "Город") */
         #minimap {
-            position: absolute; top: 55px; right: 15px; width: 190px; height: 190px;
-            background: rgba(0,0,0,0.65); border: 2px solid #ff8800; border-radius: 8px;
-            box-shadow: 0 0 12px rgba(255,136,0,0.5); pointer-events: none; z-index: 210;
+            position: absolute; top: 10px; right: 12px; width: 96px; height: 96px;
+            background: rgba(0,0,0,0.55); border: 2px solid #ff8800; border-radius: 6px;
+            box-shadow: 0 0 8px rgba(255,136,0,0.4); pointer-events: none; z-index: 210;
+            opacity: 0.9;
         }
         #powerup-hud {
             position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
@@ -326,7 +324,6 @@
             <div id="damage-overlay"></div>
             <div id="crosshair"></div>
             <div id="kill-counter">Убито: <span id="killCount">0</span> / <span id="killTotal">100</span></div>
-            <div id="location-indicator">📍 Город</div>
             <div id="health-display">
                 ❤️ Здоровье: <span id="healthValue">100</span>
                 <div id="health-bar"><div id="health-bar-fill"></div></div>
@@ -336,7 +333,7 @@
                 В магазине: <span id="ammoValue">30</span> / <span id="maxAmmoValue">30</span>
                 <div id="reserve-ammo">Запас: <span id="reserveValue">90</span></div>
             </div>
-            <canvas id="minimap" width="190" height="190"></canvas>
+            <canvas id="minimap" width="96" height="96"></canvas>
             <div id="powerup-hud">
                 <div class="powerup-badge" id="pu-speed">⚡ СУПЕР-СКОРОСТЬ: <span id="pu-speed-time">0</span>с</div>
                 <div class="powerup-badge" id="pu-jump">🦘 СУПЕР-ПРЫЖОК: <span id="pu-jump-time">0</span>с</div>
@@ -577,14 +574,8 @@ document.getElementById('btn-settings').addEventListener('click', () => {
 });
 document.getElementById('settings-back').addEventListener('click', () => {
     if (settingsReturnTo === 'game') {
-        // Возврат из настроек обратно в игру (через паузу)
-        showScreen('pause');
-        enableCustomCursor();
-        attachCursorHover([
-            document.getElementById('btn-resume'),
-            document.getElementById('btn-pause-settings'),
-            document.getElementById('btn-pause-menu')
-        ]);
+        // Возврат из настроек обратно в ИГРУ: сразу снимаем паузу и захватываем мышь
+        resumeGame();
     } else {
         toMenu();
     }
@@ -1604,14 +1595,14 @@ function tryLock() {
     } catch (err) { console.warn('lock error', err); }
 }
 
-function scheduleLockRetries() {
+function scheduleLockRetries(intervalMs = 400, maxTries = 15) {
     clearTimeout(lockRetryTimer);
     let tries = 0;
     const attempt = () => {
-        if (!gameActive || gameOver || paused || controls.isLocked || tries > 15) return;
+        if (!gameActive || gameOver || paused || controls.isLocked || tries > maxTries) return;
         tries++;
         tryLock();
-        lockRetryTimer = setTimeout(attempt, 400);
+        lockRetryTimer = setTimeout(attempt, intervalMs);
     };
     attempt();
 }
@@ -1651,9 +1642,11 @@ function resumeGame() {
     showScreen('game');
     disableCustomCursor();
     audio.gameMusic.play().catch(() => {});
-    // Браузер может отклонить requestPointerLock сразу после выхода из меню —
-    // поэтому пробуем несколько раз, пока не получится
-    scheduleLockRetries();
+    // Сбрасываем «залипшие» клавижи движения, чтобы сразу можно было идти WASD
+    moveState.forward = moveState.backward = moveState.left = moveState.right = false;
+    // Возврат из меню (пауза/настройки): браузер не даёт requestPointerLock
+    // сразу, поэтому пробуем часто в течение нескольких секунд + подсказка по клику.
+    scheduleLockRetries(600, 30);
     showClickToPlay(true);
 }
 document.getElementById('btn-resume').addEventListener('click', resumeGame);
@@ -1687,72 +1680,100 @@ document.addEventListener('keyup', (e) => {
     }
 });
 
-// ==================== МИНИ-КАРТА ====================
+// ==================== МИНИ-КАРТА (компактная, правый верхний угол) ====================
 const minimapCanvas = document.getElementById('minimap');
 const mmCtx = minimapCanvas.getContext('2d');
 // фиксируем реальный размер canvas в пикселях, чтобы карта не «расплывалась»
 (function setupMinimapSize() {
     const rect = minimapCanvas.getBoundingClientRect();
-    const size = Math.round(rect.width) || 190;
+    const size = Math.round(rect.width) || 96;
     minimapCanvas.width = size;
     minimapCanvas.height = size;
 })();
 let playerHeading = 0;
+const RADAR_RANGE = 85; // радиус обзора карты вокруг игрока (единиц мира)
 function drawMinimap() {
     if (!controls || !roadSegments) return;
     const S = minimapCanvas.width, half = S / 2;
-    const scale = (half - 8) / MAP_LIMIT; // вся карта видна целиком
+    const scale = (half - 4) / RADAR_RANGE; // окрестности игрока крупно, но компактно
     mmCtx.clearRect(0, 0, S, S);
-    mmCtx.fillStyle = 'rgba(15,20,15,0.85)';
+    mmCtx.fillStyle = 'rgba(10,14,10,0.8)';
     mmCtx.fillRect(0, 0, S, S);
-    const toX = wx => half + wx * scale;
-    const toY = wz => half + wz * scale;
-    // дороги
-    mmCtx.fillStyle = 'rgba(120,120,130,0.55)';
+
+    const p = controls.getObject().position;
+    const toX = wx => half + (wx - p.x) * scale;
+    const toY = wz => half + (wz - p.z) * scale;
+
+    // дороги рядом с игроком — рисуем только те, что в радиусе радара (быстро и чисто)
+    mmCtx.fillStyle = 'rgba(120,120,130,0.5)';
     roadSegments.forEach(r => {
-        mmCtx.fillRect(toX(r.x - r.w/2), toY(r.z - r.d/2), r.w * scale, r.d * scale);
+        if (Math.abs(r.x - p.x) > RADAR_RANGE + r.w/2 || Math.abs(r.z - p.z) > RADAR_RANGE + r.d/2) return;
+        const x = toX(r.x - r.w/2), y = toY(r.z - r.d/2);
+        mmCtx.fillRect(x, y, r.w * scale, r.d * scale);
     });
-    // здания
-    mmCtx.fillStyle = 'rgba(90,110,140,0.75)';
+    // здания рядом
+    mmCtx.fillStyle = 'rgba(90,110,140,0.7)';
     buildingColliders.forEach(b => {
+        if (Math.abs(b.x - p.x) > RADAR_RANGE + b.halfW || Math.abs(b.z - p.z) > RADAR_RANGE + b.halfD) return;
         mmCtx.fillRect(toX(b.x - b.halfW), toY(b.z - b.halfD), b.halfW*2*scale, b.halfD*2*scale);
     });
-    // предметы-бонусы
+    // предметы-бонусы (только ближайшие)
     items.forEach(it => {
         if (it.userData.pickedUp) return;
+        if (Math.abs(it.position.x - p.x) > RADAR_RANGE || Math.abs(it.position.z - p.z) > RADAR_RANGE) return;
         const t = it.userData.type;
         mmCtx.fillStyle = t === 'health' ? '#ff4444' : t === 'ammo' ? '#ffaa00' :
                           t === 'speed' ? '#00ffcc' : t === 'jump' ? '#66ff33' : '#ff4400';
         mmCtx.beginPath();
-        mmCtx.arc(toX(it.position.x), toY(it.position.z), 2.5, 0, Math.PI * 2);
+        mmCtx.arc(toX(it.position.x), toY(it.position.z), 2, 0, Math.PI * 2);
         mmCtx.fill();
     });
-    // враги
+    // границы радара — враги за пределами видимого круга показываем стрелками у края
     monsters.forEach(m => {
         if (m.userData.isDead) return;
-        mmCtx.fillStyle = m.userData.type === 'boss' ? '#ff00ff' :
-                          m.userData.type === 'gunner' ? '#ff8800' : '#ff2222';
-        mmCtx.beginPath();
-        mmCtx.arc(toX(m.position.x), toY(m.position.z), m.userData.type === 'boss' ? 4 : 2.5, 0, Math.PI * 2);
-        mmCtx.fill();
+        const dx = m.position.x - p.x, dz = m.position.z - p.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        let mx = toX(m.position.x), my = toY(m.position.z);
+        if (dist > RADAR_RANGE) {
+            // стрелка на краю круга, указывающая направление к врагу
+            const ang = Math.atan2(dz, dx);
+            mx = half + Math.cos(ang) * (half - 6);
+            my = half + Math.sin(ang) * (half - 6);
+            mmCtx.save();
+            mmCtx.translate(mx, my);
+            mmCtx.rotate(ang);
+            mmCtx.fillStyle = m.userData.type === 'boss' ? '#ff00ff' :
+                              m.userData.type === 'gunner' ? '#ff8800' : '#ff2222';
+            mmCtx.beginPath();
+            mmCtx.moveTo(4, 0); mmCtx.lineTo(-3, 2.5); mmCtx.lineTo(-3, -2.5);
+            mmCtx.closePath(); mmCtx.fill();
+            mmCtx.restore();
+        } else {
+            mmCtx.fillStyle = m.userData.type === 'boss' ? '#ff00ff' :
+                              m.userData.type === 'gunner' ? '#ff8800' : '#ff2222';
+            mmCtx.beginPath();
+            mmCtx.arc(mx, my, m.userData.type === 'boss' ? 3.5 : 2.2, 0, Math.PI * 2);
+            mmCtx.fill();
+        }
     });
-    // игрок с направлением взгляда
-    const p = controls.getObject().position;
+    // игрок в центре с направлением взгляда
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
     const ang = Math.atan2(dir.x, -dir.z);
     mmCtx.save();
-    mmCtx.translate(toX(p.x), toY(p.z));
+    mmCtx.translate(half, half);
     mmCtx.rotate(ang);
     mmCtx.fillStyle = '#ffffff';
     mmCtx.beginPath();
-    mmCtx.moveTo(0, -6); mmCtx.lineTo(4, 4); mmCtx.lineTo(-4, 4);
+    mmCtx.moveTo(0, -5); mmCtx.lineTo(3.5, 3.5); mmCtx.lineTo(-3.5, 3.5);
     mmCtx.closePath();
     mmCtx.fill();
     mmCtx.restore();
-    // кирпичная граница мира рисуем поверх всего
-    mmCtx.strokeStyle = '#c0603a';
-    mmCtx.lineWidth = 3;
-    mmCtx.strokeRect(half - MAP_LIMIT * scale, half - MAP_LIMIT * scale, MAP_LIMIT * 2 * scale, MAP_LIMIT * 2 * scale);
+    // рамка радара
+    mmCtx.strokeStyle = 'rgba(255,136,0,0.6)';
+    mmCtx.lineWidth = 1;
+    mmCtx.beginPath();
+    mmCtx.arc(half, half, half - 3, 0, Math.PI * 2);
+    mmCtx.stroke();
 }
 
 function startGame() {
