@@ -17,7 +17,7 @@
             aspect-ratio: 4 / 3; background: #000; overflow: hidden; cursor: none;
         }
         #custom-cursor {
-            position: absolute; width: 56px; height: 56px;
+            position: absolute; width: 48px; height: 48px;
             background-image: url('image/cursor.png'); background-size: contain;
             background-repeat: no-repeat; pointer-events: none; z-index: 99999;
             transform: translate(-50%, -50%); display: none; image-rendering: pixelated;
@@ -54,11 +54,10 @@
             border-radius: 4px; box-shadow: 0 0 20px #ffaa00;
         }
         #patron-loader {
-            position: absolute; top: 50%; left: 0; width: 56px; height: 56px;
+            position: absolute; top: 50%; left: 0; width: 64px; height: 64px;
             background-image: url('image/patron.png'); background-size: contain;
             background-repeat: no-repeat; transform: translate(-50%, -50%); z-index: 2;
             filter: drop-shadow(0 0 8px #ffcc00) drop-shadow(0 0 20px #ff6600);
-            margin-top: -60px;
         }
         #patron-loader.spinning { animation: spin 1s linear infinite; }
         @keyframes spin {
@@ -78,7 +77,6 @@
             background-size: cover; background-position: center;
             justify-content: center; align-items: flex-start;
             flex-direction: column; padding-left: 8%; z-index: 3000;
-            padding-top: 100px; /* Кнопки опущены вниз */
         }
         .menu-btn {
             width: 300px; padding: 18px 0; margin: 12px 0;
@@ -255,6 +253,7 @@
     </div>
 
     <div class="screen" id="menu-screen">
+        <div style="height: 100px;"></div>
         <button class="menu-btn" id="btn-play">ИГРАТЬ</button>
         <button class="menu-btn" id="btn-settings">НАСТРОЙКИ</button>
     </div>
@@ -486,7 +485,7 @@ function startCutscene() {
             skipped = true;
             cutsceneVideo.pause();
             document.removeEventListener('keydown', skipHandler);
-            startLoading('game');
+            startLoading('game'); // ← ИГРА после катсцены
         }
     };
     document.addEventListener('keydown', skipHandler);
@@ -497,7 +496,7 @@ function startCutscene() {
             cutsceneVideo.removeEventListener('timeupdate', onTime);
             cutsceneVideo.pause();
             document.removeEventListener('keydown', skipHandler);
-            startLoading('game');
+            startLoading('game'); // ← ИГРА после катсцены
         }
     });
 }
@@ -612,78 +611,44 @@ const WEAPONS = {
 let ammoInMag = WEAPONS.rifle.maxAmmo;
 let reserveAmmo = 90;
 
-// ==================== ЗАГРУЗКА ТЕКСТУР ====================
 const textureLoader = new THREE.TextureLoader();
-
-function loadTex(path) {
-    const tex = textureLoader.load(
-        path,
-        (t) => {
-            console.log(`✅ Текстура загружена: ${path}`);
-            t.colorSpace = THREE.SRGBColorSpace;
-            t.magFilter = THREE.LinearFilter;
-            t.minFilter = THREE.LinearFilter;
-            t.generateMipmaps = false;
-        },
-        undefined,
-        (err) => {
-            console.error(`❌ ОШИБКА: не удалось загрузить ${path}`);
-            console.error('   Проверьте путь и запуск через локальный сервер');
-        }
-    );
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.magFilter = THREE.LinearFilter;
-    tex.minFilter = THREE.LinearFilter;
-    tex.generateMipmaps = false;
-    return tex;
-}
-
 const textures = {
-    normal: loadTex('image/normal.png'),
-    normalPain: loadTex('image/normal_pain.png'),
-    normalGun: loadTex('image/normal_gun.png'),
-    normalGunPain: loadTex('image/normal_gun_pain.png'),
-    boss: loadTex('image/boss.png')
+    normal: textureLoader.load('image/normal.png'),
+    normalPain: textureLoader.load('image/normal_pain.png'),
+    normalGun: textureLoader.load('image/normal_gun.png'),
+    normalGunPain: textureLoader.load('image/normal_gun_pain.png'),
+    boss: textureLoader.load('image/boss.png')
 };
 
-// ==================== МОНСТР ====================
-function createMonster(x, z, type, inFactory) {
+function createMonsterMesh(x, z, type, inFactory) {
     const group = new THREE.Group();
     
-    // Спрайт (всегда смотрит на игрока — встроено в THREE.Sprite)
-    const material = new THREE.SpriteMaterial({
-        map: textures.normal,
-        transparent: true,
-        alphaTest: 0.3,
-        depthTest: true,
-        depthWrite: false,
-        sizeAttenuation: true
-    });
+    const material = new THREE.SpriteMaterial({ map: textures.normal });
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(4, 4, 1);
-    sprite.position.y = 2;
+    sprite.scale.set(2, 2, 1);
+    sprite.position.y = 1;
     group.add(sprite);
     
     group.position.set(x, 0, z);
     
-    let hp = 3;
+    let healthVal = 3;
     let speed = monsterSpeedMin + Math.random() * (monsterSpeedMax - monsterSpeedMin);
     
     if (type === 'gunner') {
-        hp = 4;
-        material.map = textures.normalGun;
+        healthVal = 4;
+        sprite.material.map = textures.normalGun;
     } else if (type === 'boss') {
-        hp = 50;
+        healthVal = 50;
         speed = monsterSpeedMin * 0.6;
-        sprite.scale.set(12, 12, 1);
-        sprite.position.y = 6;
-        material.map = textures.boss;
+        sprite.scale.set(6, 6, 1);
+        sprite.position.y = 3;
+        sprite.material.map = textures.boss;
     }
 
     group.userData = {
         type: type,
-        health: hp,
-        maxHealth: hp,
+        health: healthVal,
+        maxHealth: healthVal,
         speed: speed,
         lastAttackTime: 0,
         lastShotTime: 0,
@@ -691,21 +656,19 @@ function createMonster(x, z, type, inFactory) {
         walkPhase: Math.random() * Math.PI * 2,
         inFactory: inFactory,
         sprite: sprite,
-        material: material,
         painTimer: 0
     };
     
     return group;
 }
 
-// ==== МИР ====
 let buildingColliders = [], factoryWallColliders = [];
 let factoryData = {};
 
 function buildWorld() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.Fog(0x87CEEB, 150, 700);
+    scene.fog = new THREE.Fog(0x87CEEB, 60, 450);
 
     camera = new THREE.PerspectiveCamera(75, 4/3, 0.1, 1500);
     camera.position.set(0, PLAYER_HEIGHT, 0);
@@ -716,8 +679,8 @@ function buildWorld() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     screens.game.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
     sun.position.set(80, 150, 60);
     sun.castShadow = true;
     sun.shadow.mapSize.width = 2048;
@@ -937,16 +900,15 @@ function spawnMonster(inFactory = null) {
         }
         if (Math.abs(x) > MAP_LIMIT - 5 || Math.abs(z) > MAP_LIMIT - 5) continue;
         if (collidesWithBuilding(x, z, 1.5)) continue;
-        
         const dp = Math.sqrt((x - playerPos.x)**2 + (z - playerPos.z)**2);
-        if (dp < 8) continue;
+        if (dp < 25) continue;
         
         let type = 'normal';
         const rand = Math.random();
         if (rand < 0.25) type = 'gunner';
         else if (rand < 0.28 && killCount > 10) type = 'boss';
         
-        const m = createMonster(x, z, type, isFac);
+        const m = createMonsterMesh(x, z, type, isFac);
         monsterGroup.add(m);
         monsters.push(m);
         return true;
@@ -1119,12 +1081,7 @@ function shoot() {
     raycaster.setFromCamera(centerMouse, camera);
     const targets = [];
     monsters.forEach((m, idx) => {
-        if (!m.userData.isDead) m.traverse(c => { 
-            if (c.isSprite) { 
-                c.userData.mIdx = idx; 
-                targets.push(c); 
-            } 
-        });
+        if (!m.userData.isDead) m.traverse(c => { if (c.isSprite) { c.userData.mIdx = idx; targets.push(c); } });
     });
     const intersects = raycaster.intersectObjects(targets);
     const startPoint = new THREE.Vector3(0.25, -0.25, -1);
@@ -1204,25 +1161,22 @@ function updateMonsters(delta) {
     monsters.forEach(monster => {
         if (monster.userData.isDead) return;
         
-        // Смена текстуры боли
         if (monster.userData.painTimer > 0) {
             monster.userData.painTimer -= delta;
+            let painTex = textures.normalPain;
+            if (monster.userData.type === 'gunner') painTex = textures.normalGunPain;
+            
             if (monster.userData.type !== 'boss') {
-                const painTex = monster.userData.type === 'gunner' ? textures.normalGunPain : textures.normalPain;
-                if (monster.userData.material.map !== painTex) {
-                    monster.userData.material.map = painTex;
-                    monster.userData.material.needsUpdate = true;
-                }
+                monster.userData.sprite.material.map = painTex;
+                monster.userData.sprite.material.needsUpdate = true;
             }
         } else {
             let normalTex = textures.normal;
             if (monster.userData.type === 'gunner') normalTex = textures.normalGun;
             else if (monster.userData.type === 'boss') normalTex = textures.boss;
             
-            if (monster.userData.material.map !== normalTex) {
-                monster.userData.material.map = normalTex;
-                monster.userData.material.needsUpdate = true;
-            }
+            monster.userData.sprite.material.map = normalTex;
+            monster.userData.sprite.material.needsUpdate = true;
         }
         
         tmpVec.subVectors(playerPosVec, monster.position);
