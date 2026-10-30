@@ -528,6 +528,11 @@ const fwCanvas = document.getElementById('fireworks-canvas');
 const fwCtx = fwCanvas.getContext('2d');
 let fwParticles = [], fwRAF = null, fwLastLaunch = 0;
 
+// Ограничители, чтобы салют не «вешал» игру (мало частиц, редкие залпы)
+const FW_MAX_PARTICLES = 260;   // жёсткий потолок количества частиц
+const FW_LAUNCH_MIN_MS = 1500;  // не чаще одного залпа в ~1.5–2.8 сек
+const FW_LAUNCH_RAND_MS = 1300;
+
 const FW_COLORS = [
     // золотые искры
     '#ffd700', '#ffcc33', '#ffb400', '#fff2a8',
@@ -542,7 +547,9 @@ function fwResize() {
 }
 
 function fwSpawnExplosion(x, y, isGoldenSpark) {
-    const count = isGoldenSpark ? 26 : (50 + Math.floor(Math.random() * 40));
+    // если частиц уже много — новые залпы не запускаем (защита от лагов)
+    if (fwParticles.length > FW_MAX_PARTICLES) return;
+    const count = isGoldenSpark ? 12 : (18 + Math.floor(Math.random() * 12));
     const color = isGoldenSpark
         ? FW_COLORS[Math.floor(Math.random() * 4)]
         : FW_COLORS[4 + Math.floor(Math.random() * (FW_COLORS.length - 4))];
@@ -570,11 +577,14 @@ function fwLoop(ts) {
     fwRAF = requestAnimationFrame(fwLoop);
     const W = fwCanvas.width, H = fwCanvas.height;
 
-    // запуск новых залпов
-    if (ts - fwLastLaunch > 380 + Math.random() * 420) {
+    // запуск новых залпов — редко, чтобы не грузить игру
+    if (ts - fwLastLaunch > FW_LAUNCH_MIN_MS + Math.random() * FW_LAUNCH_RAND_MS) {
         fwLastLaunch = ts;
-        fwSpawnExplosion(W * (0.12 + Math.random() * 0.76), H * (0.12 + Math.random() * 0.45), false);
-        if (Math.random() < 0.6) fwSpawnExplosion(W * (0.1 + Math.random() * 0.8), H * (0.2 + Math.random() * 0.6), true);
+        if (Math.random() < 0.35) {
+            fwSpawnExplosion(W * (0.12 + Math.random() * 0.76), H * (0.12 + Math.random() * 0.45), false);
+        } else {
+            fwSpawnExplosion(W * (0.1 + Math.random() * 0.8), H * (0.2 + Math.random() * 0.6), true);
+        }
     }
 
     // лёгкий шлейф (затухание кадра)
@@ -602,8 +612,6 @@ function fwLoop(ts) {
 
         fwCtx.globalAlpha = Math.max(0, Math.min(1, p.life));
         fwCtx.fillStyle = p.color;
-        fwCtx.shadowBlur = 12;
-        fwCtx.shadowColor = p.color;
         fwCtx.beginPath();
         fwCtx.arc(p.x, p.y, p.size * (0.4 + p.life * 0.8), 0, Math.PI * 2);
         fwCtx.fill();
@@ -614,7 +622,6 @@ function fwLoop(ts) {
             fwCtx.fill();
         }
     }
-    fwCtx.shadowBlur = 0;
     fwCtx.globalAlpha = 1;
     fwCtx.globalCompositeOperation = 'source-over';
 }
@@ -625,11 +632,9 @@ function startFireworks() {
     fwCanvas.classList.add('on');
     fwCtx.clearRect(0, 0, fwCanvas.width, fwCanvas.height);
     fwParticles = [];
-    // первые залпы сразу — чтобы не было паузы
+    // первые залпы сразу — чтобы не было паузы (только искры, без крупных взрывов)
     const W = fwCanvas.width, H = fwCanvas.height;
-    fwSpawnExplosion(W * 0.3, H * 0.28, false);
-    fwSpawnExplosion(W * 0.7, H * 0.22, false);
-    fwSpawnExplosion(W * 0.5, H * 0.4, true);
+    fwSpawnExplosion(W * 0.5, H * 0.32, true);
     if (!fwRAF) fwRAF = requestAnimationFrame(fwLoop);
 }
 
@@ -1904,11 +1909,13 @@ function endGame(victory) {
         dsScreen.classList.add('active');            // затемнение до чёрного
         // медленное проявление текста за 3 секунды
         deathTimers.push(setTimeout(() => dsText.classList.add('show'), 150));
-        // подсказка о кнопках появляется после полного проявления
-        deathTimers.push(setTimeout(() => dsHint.classList.add('show'), 3400));
+        // подсказка о кнопках появляется почти сразу — Enter работает уже сейчас
+        deathTimers.push(setTimeout(() => dsHint.classList.add('show'), 700));
 
+        let handled = false;                          // защита от двойного срабатывания (Enter + клик)
         const proceed = () => {
-            if (!deathSkipFn) return;                // уже обработано
+            if (handled) return;
+            handled = true;
             deathSkipFn = null;
             clearDeathTimers();
             dsScreen.removeEventListener('click', skipDeathScreen);
@@ -1920,12 +1927,15 @@ function endGame(victory) {
         };
         deathSkipFn = proceed;
         const onDeathKey = (e) => {
-            if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); proceed(); }
+            if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') {
+                e.preventDefault();
+                proceed();
+            }
         };
         dsScreen.addEventListener('click', skipDeathScreen);
         document.addEventListener('keydown', onDeathKey);
-        // текст полностью проявился за 3 сек — через 4.5 сек автоматически показываем кнопки
-        deathTimers.push(setTimeout(proceed, 4500));
+        // если игрок ничего не нажал — кнопки появятся автоматически через 2.2 сек
+        deathTimers.push(setTimeout(proceed, 2200));
     }
 }
 
