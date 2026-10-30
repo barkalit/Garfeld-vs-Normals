@@ -190,33 +190,87 @@
         }
         .pause-btn:hover { background: rgba(255,102,0,0.35); transform: scale(1.05); box-shadow: 0 0 20px rgba(255,102,0,0.8); }
 
-        /* КОНЕЦ ИГРЫ */
-        #gameover-screen { background: rgba(0,0,0,0.9); justify-content: center; align-items: center; flex-direction: column; z-index: 2600; }
-        #gameover-title { font-size: 80px; font-weight: bold; margin-bottom: 60px; text-shadow: 0 0 30px currentColor; letter-spacing: 6px; opacity: 0; transition: opacity 2s; }
-        #gameover-title.show { opacity: 1; }
+        /* КОНЕЦ ИГРЫ / ПОБЕДА */
+        #gameover-screen { background: rgba(0,0,0,0.92); justify-content: center; align-items: center; flex-direction: column; z-index: 2600; overflow: hidden; }
+        /* Пульсирующий золотой свет на экране победы */
+        #victory-glow {
+            position: absolute; top: 50%; left: 50%; width: 140%; height: 140%;
+            transform: translate(-50%, -50%); pointer-events: none; z-index: 0;
+            background: radial-gradient(circle at center, rgba(255,200,60,0.30) 0%, rgba(255,140,0,0.12) 35%, rgba(0,0,0,0) 70%);
+            animation: goldPulse 2.6s ease-in-out infinite;
+        }
+        @keyframes goldPulse {
+            0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(0.92); }
+            50%       { opacity: 1;    transform: translate(-50%, -50%) scale(1.08); }
+        }
+        /* Салют из частиц поверх затемнённого фона, но под текстом/кнопками */
+        #fireworks-canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 1; display: none;
+        }
+        #gameover-subtitle {
+            position: relative; z-index: 2; color: #ffd27a; font-size: 22px; letter-spacing: 4px;
+            margin-top: -30px; margin-bottom: 40px; text-shadow: 0 0 15px rgba(255,170,0,0.8);
+            opacity: 0; transition: opacity 2.5s ease-in 1s; text-align: center; padding: 0 20px;
+        }
+        #gameover-subtitle.show { opacity: 1; }
+        #gameover-title {
+            position: relative; z-index: 2; font-family: 'Times New Roman', serif;
+            font-size: 110px; font-weight: bold; margin-bottom: 60px; letter-spacing: 8px;
+            color: #ffdd55; text-shadow: 0 0 30px currentColor;
+            opacity: 0; transform: translateY(30px) scale(0.85);
+            transition: opacity 2.2s ease-out, transform 2.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+        }
+        #gameover-title.show { opacity: 1; transform: translateY(0) scale(1); }
+        #gameover-title.victory-anim { animation: victoryShine 2.4s ease-in-out 2.2s infinite; }
+        @keyframes victoryShine {
+            0%, 100% { text-shadow: 0 0 25px rgba(255,200,60,0.8), 0 0 60px rgba(255,140,0,0.4); transform: scale(1); }
+            50%      { text-shadow: 0 0 45px rgba(255,235,150,1), 0 0 110px rgba(255,180,0,0.85); transform: scale(1.04); }
+        }
         .gameover-btn {
+            position: relative; z-index: 2;
             width: 320px; padding: 20px 0; margin: 12px 0; font-size: 24px; font-weight: bold;
             color: #fff; background: rgba(0,0,0,0.7); border: 3px solid #ff6600;
             border-radius: 8px; cursor: none; letter-spacing: 2px; transition: all 0.15s;
-            display: none;
+            display: none; pointer-events: auto;
         }
-        .gameover-btn:hover { background: rgba(255,102,0,0.35); transform: scale(1.05); box-shadow: 0 0 25px rgba(255,102,0,0.9); }
+        .gameover-btn:hover { background: rgba(255,102,0,0.35); transform: scale(1.05); box-shadow: 0 0 25px rgba(255,102,0,0.9); color: #ffe9c9; }
         .gameover-btn.show { display: block; }
 
-        /* Dark Souls Death Screen */
+        /* ===== ЭКРАН СМЕРТИ В СТИЛЕ DARK SOULS («ВЫ УМЕРЛИ») ===== */
         #ds-death-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; display: none; justify-content: center; align-items: center;
             z-index: 3000; flex-direction: column;
+            opacity: 0; transition: opacity 1.4s ease-in;
+            pointer-events: auto; /* кастомный курсор и клики по экрану работают */
         }
-        #ds-death-screen.active { display: flex; }
+        #ds-death-screen.active { display: flex; opacity: 1; }
+        /* Лёгкая виньетка, как в Dark Souls */
+        #ds-death-vignette {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+            background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
+        }
         #ds-death-text {
-            color: #8a0000; font-family: 'Times New Roman', serif; font-size: 96px;
-            font-weight: bold; letter-spacing: 8px; opacity: 0;
+            position: relative;
+            /* красный полупрозрачный текст, как «YOU DIED» в Dark Souls */
+            color: rgba(170, 15, 15, 0.75);
+            font-family: 'Times New Roman', serif; font-size: 110px;
+            font-weight: bold; letter-spacing: 12px; opacity: 0;
+            /* медленное проявление за 3 секунды */
             transition: opacity 3s ease-in;
-            text-shadow: 0 0 20px #ff0000;
+            text-shadow: 0 0 18px rgba(255,0,0,0.55), 0 0 60px rgba(150,0,0,0.4);
+            text-align: center; padding: 0 20px;
         }
         #ds-death-text.show { opacity: 1; }
+        /* Подсказка под «ВЫ УМЕРЛИ» — кнопки с кастомным курсором */
+        #ds-death-hint {
+            position: absolute; bottom: 9%; left: 50%; transform: translateX(-50%);
+            color: rgba(200, 200, 200, 0.55); font-size: 17px; letter-spacing: 3px;
+            pointer-events: none; opacity: 0; transition: opacity 1.2s ease-in;
+            text-align: center; white-space: nowrap;
+        }
+        #ds-death-hint.show { opacity: 1; }
 
         #pickup-notify {
             position: absolute; top: 30%; left: 50%; transform: translateX(-50%);
@@ -355,12 +409,19 @@
         <button class="pause-btn" id="btn-pause-menu">ВЫЙТИ В МЕНЮ</button>
     </div>
 
+    <!-- ЭКРАН СМЕРТИ (Dark Souls стиль, текст на русском) -->
     <div id="ds-death-screen">
-        <div id="ds-death-text">YOU DIED</div>
+        <div id="ds-death-vignette"></div>
+        <div id="ds-death-text">ВЫ УМЕРЛИ</div>
+        <div id="ds-death-hint">Кликните или нажмите Enter, чтобы продолжить...</div>
     </div>
 
+    <!-- ЭКРАН ПОБЕДЫ / ПОРАЖЕНИЯ -->
     <div class="screen" id="gameover-screen">
+        <div id="victory-glow" style="display:none;"></div>
+        <canvas id="fireworks-canvas"></canvas>
         <div id="gameover-title">ПОБЕДА!</div>
+        <div id="gameover-subtitle">Город спасён — Гарфельды победили!</div>
         <button class="gameover-btn" id="btn-restart">НАЧАТЬ ЗАНОВО</button>
         <button class="gameover-btn" id="btn-to-menu">ВЕРНУТЬСЯ В МЕНЮ</button>
     </div>
@@ -451,12 +512,160 @@ container.addEventListener('mousemove', (e) => {
 function attachCursorHover(elements) {
     elements.forEach(el => {
         if (!el) return;
+        // не навешиваем обработчики повторно при перезапуске игры
+        if (el.dataset.cursorBound === '1') return;
+        el.dataset.cursorBound = '1';
         el.addEventListener('mouseenter', () => cursorEl.classList.add('hover'));
         el.addEventListener('mouseleave', () => cursorEl.classList.remove('hover'));
         el.addEventListener('mousedown', () => cursorEl.classList.add('active'));
         el.addEventListener('mouseup', () => cursorEl.classList.remove('active'));
         el.addEventListener('click', () => playSound(audio.click));
     });
+}
+
+// ==================== САЛЮТ / ЭФФЕКТЫ ПОБЕДЫ ====================
+const fwCanvas = document.getElementById('fireworks-canvas');
+const fwCtx = fwCanvas.getContext('2d');
+let fwParticles = [], fwRAF = null, fwLastLaunch = 0;
+
+const FW_COLORS = [
+    // золотые искры
+    '#ffd700', '#ffcc33', '#ffb400', '#fff2a8',
+    // разноцветные вспышки
+    '#ff4d4d', '#4dff88', '#4dc3ff', '#c96bff', '#ff8a3d', '#ffffff'
+];
+
+function fwResize() {
+    const r = container.getBoundingClientRect();
+    fwCanvas.width = Math.max(1, Math.round(r.width));
+    fwCanvas.height = Math.max(1, Math.round(r.height));
+}
+
+function fwSpawnExplosion(x, y, isGoldenSpark) {
+    const count = isGoldenSpark ? 26 : (50 + Math.floor(Math.random() * 40));
+    const color = isGoldenSpark
+        ? FW_COLORS[Math.floor(Math.random() * 4)]
+        : FW_COLORS[4 + Math.floor(Math.random() * (FW_COLORS.length - 4))];
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = (isGoldenSpark ? 1.2 : 2.5) + Math.random() * (isGoldenSpark ? 2.2 : 4.5);
+        fwParticles.push({
+            x, y,
+            vx: Math.cos(a) * sp,
+            vy: Math.sin(a) * sp,
+            life: 1,
+            decay: 0.008 + Math.random() * 0.014,
+            size: 1.2 + Math.random() * (isGoldenSpark ? 1.8 : 2.6),
+            color,
+            gravity: isGoldenSpark ? 0.015 : 0.045,
+            trail: !isGoldenSpark
+        });
+    }
+    // вспышка в центре взрыва
+    fwParticles.push({ x, y, vx: 0, vy: 0, life: 1, decay: 0.09, size: 26, color: '#fff8d0', flash: true, gravity: 0 });
+}
+
+function fwLoop(ts) {
+    if (!fwCanvas.classList.contains('on')) { fwRAF = null; return; }
+    fwRAF = requestAnimationFrame(fwLoop);
+    const W = fwCanvas.width, H = fwCanvas.height;
+
+    // запуск новых залпов
+    if (ts - fwLastLaunch > 380 + Math.random() * 420) {
+        fwLastLaunch = ts;
+        fwSpawnExplosion(W * (0.12 + Math.random() * 0.76), H * (0.12 + Math.random() * 0.45), false);
+        if (Math.random() < 0.6) fwSpawnExplosion(W * (0.1 + Math.random() * 0.8), H * (0.2 + Math.random() * 0.6), true);
+    }
+
+    // лёгкий шлейф (затухание кадра)
+    fwCtx.globalCompositeOperation = 'source-over';
+    fwCtx.fillStyle = 'rgba(0,0,0,0.22)';
+    fwCtx.fillRect(0, 0, W, H);
+    fwCtx.globalCompositeOperation = 'lighter';
+
+    for (let i = fwParticles.length - 1; i >= 0; i--) {
+        const p = fwParticles[i];
+        p.x += p.vx; p.y += p.vy;
+        p.vy += p.gravity;
+        p.vx *= 0.985; p.vy *= 0.985;
+        p.life -= p.decay;
+        if (p.life <= 0) { fwParticles.splice(i, 1); continue; }
+
+        if (p.flash) {
+            const g = fwCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * p.life * 2.2);
+            g.addColorStop(0, 'rgba(255,248,208,' + (0.55 * p.life).toFixed(3) + ')');
+            g.addColorStop(1, 'rgba(255,248,208,0)');
+            fwCtx.fillStyle = g;
+            fwCtx.beginPath(); fwCtx.arc(p.x, p.y, p.size * p.life * 2.2, 0, Math.PI * 2); fwCtx.fill();
+            continue;
+        }
+
+        fwCtx.globalAlpha = Math.max(0, Math.min(1, p.life));
+        fwCtx.fillStyle = p.color;
+        fwCtx.shadowBlur = 12;
+        fwCtx.shadowColor = p.color;
+        fwCtx.beginPath();
+        fwCtx.arc(p.x, p.y, p.size * (0.4 + p.life * 0.8), 0, Math.PI * 2);
+        fwCtx.fill();
+        if (p.trail) { // короткий хвост у искр
+            fwCtx.globalAlpha = Math.max(0, p.life * 0.35);
+            fwCtx.beginPath();
+            fwCtx.arc(p.x - p.vx * 2, p.y - p.vy * 2, p.size * 0.6, 0, Math.PI * 2);
+            fwCtx.fill();
+        }
+    }
+    fwCtx.shadowBlur = 0;
+    fwCtx.globalAlpha = 1;
+    fwCtx.globalCompositeOperation = 'source-over';
+}
+
+function startFireworks() {
+    fwResize();
+    fwCanvas.style.display = 'block';
+    fwCanvas.classList.add('on');
+    fwCtx.clearRect(0, 0, fwCanvas.width, fwCanvas.height);
+    fwParticles = [];
+    // первые залпы сразу — чтобы не было паузы
+    const W = fwCanvas.width, H = fwCanvas.height;
+    fwSpawnExplosion(W * 0.3, H * 0.28, false);
+    fwSpawnExplosion(W * 0.7, H * 0.22, false);
+    fwSpawnExplosion(W * 0.5, H * 0.4, true);
+    if (!fwRAF) fwRAF = requestAnimationFrame(fwLoop);
+}
+
+function stopFireworks() {
+    fwCanvas.classList.remove('on');
+    fwCanvas.style.display = 'none';
+    fwParticles = [];
+    if (fwRAF) { cancelAnimationFrame(fwRAF); fwRAF = null; }
+}
+
+// Таймеры финальных экранов (чтобы отменять при рестарте/выходе в меню)
+let deathTimers = [];
+function clearDeathTimers() {
+    deathTimers.forEach(t => clearTimeout(t));
+    deathTimers = [];
+}
+
+function resetEndScreen() {
+    clearDeathTimers();
+    const titleEl = document.getElementById('gameover-title');
+    const subEl = document.getElementById('gameover-subtitle');
+    const glowEl = document.getElementById('victory-glow');
+    const dsHint = document.getElementById('ds-death-hint');
+    titleEl.classList.remove('show', 'victory-anim');
+    titleEl.textContent = 'ПОБЕДА!';
+    titleEl.style.color = '#ffdd55';
+    subEl.classList.remove('show');
+    subEl.style.display = 'none';
+    glowEl.style.display = 'none';
+    const dsText = document.getElementById('ds-death-text');
+    dsText.classList.remove('show');
+    if (dsHint) dsHint.classList.remove('show');
+    document.getElementById('ds-death-screen').classList.remove('active');
+    document.getElementById('btn-restart').classList.remove('show');
+    document.getElementById('btn-to-menu').classList.remove('show');
+    stopFireworks();
 }
 
 // ==================== ЭКРАНЫ ====================
@@ -1612,6 +1821,63 @@ function damagePlayer(amount) {
     if (health <= 0) endGame(false);
 }
 
+// Показ финального экрана (победа или поражение) с кастомным курсором cursor.png
+function showEndScreen(victory) {
+    const titleEl = document.getElementById('gameover-title');
+    const subEl = document.getElementById('gameover-subtitle');
+    const glowEl = document.getElementById('victory-glow');
+    const btnRestart = document.getElementById('btn-restart');
+    const btnToMenu = document.getElementById('btn-to-menu');
+
+    resetEndScreen();
+    // заставляем браузер «забыть» прежние классы, чтобы анимация проявления проигралась заново
+    void titleEl.offsetWidth;
+
+    if (victory) {
+        // ===== ПОБЕДА: салют из частиц, золотое свечение, фанфары =====
+        titleEl.textContent = 'ПОБЕДА!';
+        titleEl.style.color = '#ffdd55';
+        subEl.textContent = 'Город спасён — Гарфельды победили!';
+        subEl.style.display = 'block';
+        glowEl.style.display = 'block';               // пульсирующий золотой свет
+        showScreen('gameover');
+        startFireworks();                             // салют: золотые искры + разноцветные вспышки
+        requestAnimationFrame(() => {                 // плавное появление надписи «ПОБЕДА!»
+            titleEl.classList.add('show', 'victory-anim');
+            subEl.classList.add('show');
+        });
+    } else {
+        // ===== ПОРАЖЕНИЕ: тёмный экран, красная надпись в стиле Dark Souls =====
+        titleEl.textContent = 'ВЫ УМЕРЛИ';
+        titleEl.style.color = 'rgba(170, 15, 15, 0.75)';   // красный полупрозрачный
+        titleEl.style.fontSize = '110px';
+        titleEl.style.letterSpacing = '12px';
+        subEl.textContent = 'Нормалы захватили город...';
+        subEl.style.display = 'block';
+        glowEl.style.display = 'none';
+        showScreen('gameover');
+        requestAnimationFrame(() => {
+            titleEl.classList.add('show');
+            subEl.classList.add('show');
+        });
+    }
+
+    // КУРСОР (cursor.png, тот же размер что и в меню) И КНОПКИ работают на обоих экранах
+    btnRestart.classList.add('show');
+    btnToMenu.classList.add('show');
+    enableCustomCursor();
+    attachCursorHover([btnRestart, btnToMenu]);
+}
+
+// Прерывание затемнённого экрана смерти по клику/Enter (ускоряет переход к кнопкам)
+let deathSkipFn = null;
+function skipDeathScreen() {
+    if (!deathSkipFn) return;
+    const fn = deathSkipFn;
+    deathSkipFn = null;
+    fn();
+}
+
 function endGame(victory) {
     if (gameOver) return;
     gameOver = true;
@@ -1620,55 +1886,63 @@ function endGame(victory) {
     controls.unlock();
     stopAllMusic();
     disableCustomCursor();
-    
+    clearDeathTimers();
+
     if (victory) {
+        // Звук фанфар + эффекты победы
         playMusic(audio.youWin);
-        const titleEl = document.getElementById('gameover-title');
-        titleEl.textContent = 'ПОБЕДА!';
-        titleEl.style.color = '#44ff44';
-        titleEl.classList.add('show');
-        showScreen('gameover');
-        const btnRestart = document.getElementById('btn-restart');
-        const btnToMenu = document.getElementById('btn-to-menu');
-        btnRestart.classList.add('show');
-        btnToMenu.classList.add('show');
-        attachCursorHover([btnRestart, btnToMenu]);
+        showEndScreen(true);
     } else {
-        playMusic(audio.youDead);
+        // ===== Тёмный экран в стиле Dark Souls с русской надписью «ВЫ УМЕРЛИ» =====
+        playMusic(audio.youDead);                    // музыка you_dead.mp3
         const dsScreen = document.getElementById('ds-death-screen');
-        dsScreen.classList.add('active');
-        setTimeout(() => { document.getElementById('ds-death-text').classList.add('show'); }, 100);
-        setTimeout(() => {
+        const dsText = document.getElementById('ds-death-text');
+        const dsHint = document.getElementById('ds-death-hint');
+        dsText.textContent = 'ВЫ УМЕРЛИ';
+        dsText.classList.remove('show');
+        dsHint.classList.remove('show');
+        dsScreen.classList.add('active');            // затемнение до чёрного
+        // медленное проявление текста за 3 секунды
+        deathTimers.push(setTimeout(() => dsText.classList.add('show'), 150));
+        // подсказка о кнопках появляется после полного проявления
+        deathTimers.push(setTimeout(() => dsHint.classList.add('show'), 3400));
+
+        const proceed = () => {
+            if (!deathSkipFn) return;                // уже обработано
+            deathSkipFn = null;
+            clearDeathTimers();
+            dsScreen.removeEventListener('click', skipDeathScreen);
+            document.removeEventListener('keydown', onDeathKey);
             dsScreen.classList.remove('active');
-            const titleEl = document.getElementById('gameover-title');
-            titleEl.textContent = 'ВЫ УМЕРЛИ';
-            titleEl.style.color = '#ff2222';
-            titleEl.classList.add('show');
-            showScreen('gameover');
-            const btnRestart = document.getElementById('btn-restart');
-            const btnToMenu = document.getElementById('btn-to-menu');
-            btnRestart.classList.add('show');
-            btnToMenu.classList.add('show');
-            attachCursorHover([btnRestart, btnToMenu]);
-        }, 5000);
+            dsText.classList.remove('show');
+            dsHint.classList.remove('show');
+            showEndScreen(false);                    // экран с кнопками + кастомный курсор
+        };
+        deathSkipFn = proceed;
+        const onDeathKey = (e) => {
+            if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); proceed(); }
+        };
+        dsScreen.addEventListener('click', skipDeathScreen);
+        document.addEventListener('keydown', onDeathKey);
+        // текст полностью проявился за 3 сек — через 4.5 сек автоматически показываем кнопки
+        deathTimers.push(setTimeout(proceed, 4500));
     }
 }
 
 document.getElementById('btn-restart').addEventListener('click', () => {
-    document.getElementById('gameover-title').classList.remove('show');
-    document.getElementById('btn-restart').classList.remove('show');
-    document.getElementById('btn-to-menu').classList.remove('show');
+    resetEndScreen();
     startGame();
 });
 document.getElementById('btn-to-menu').addEventListener('click', () => {
-    document.getElementById('gameover-title').classList.remove('show');
-    document.getElementById('btn-restart').classList.remove('show');
-    document.getElementById('btn-to-menu').classList.remove('show');
-    cleanupGame(); 
-    toMenu(); 
+    resetEndScreen();
+    cleanupGame();
+    toMenu();
 });
 
 function cleanupGame() {
+    clearDeathTimers();
+    deathSkipFn = null;
+    resetEndScreen();   // гасим салют и убираем экран смерти/победы
     if (monsterGroup) monsters.forEach(m => monsterGroup.remove(m));
     monsters = [];
     if (itemGroup) items.forEach(i => itemGroup.remove(i));
@@ -1861,6 +2135,7 @@ function drawMinimap() {
 }
 
 function startGame() {
+    resetEndScreen();   // чистим эффекты предыдущего финала (салют, «ВЫ УМЕРЛИ»)
     showScreen('game');
     document.getElementById('hud').classList.add('active');
     disableCustomCursor();
@@ -1979,6 +2254,8 @@ window.addEventListener('resize', () => {
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
     }
+    // если идёт салют — подстраиваем размер канваса под новое окно
+    if (fwCanvas.classList.contains('on')) fwResize();
 });
 
 animate();
